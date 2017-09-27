@@ -1,0 +1,80 @@
+pragma solidity ^0.4.0;
+contract kOfNWallet {
+
+    mapping(address => bool) signed;
+    mapping(address => bool) members;
+    address[] wallet_parties;
+    uint8 k = 1;
+    uint8 parties_signed = 0;
+    uint amountToSend;
+    bool sent_money = false;
+    
+    // fallback function to receive money
+    function() payable { }
+    
+    /// Create a wallet where k of the people in the party need to 
+    // sign the contract for the funds to be released
+    function kOfNWallet(address[] parties, uint8 threshold) payable {
+        // add the members to the list
+        // check if number of parties is greater than threshold
+        if (parties.length < threshold) {
+            //send back the money
+            msg.sender.transfer(msg.value);
+            return;
+        }
+        k = threshold;
+        for(uint i=0;i<parties.length;i++) {
+            members[parties[i]] = true;
+        }
+        wallet_parties = parties;
+    }
+
+    // Function to be called by single parties to agree on
+    // releasing funds
+    function sign1Person(uint val) {
+        // only members can sign, and the value should be the same
+        if (members[msg.sender] && val == amountToSend) {
+            if (!signed[msg.sender]) {
+                signed[msg.sender] = true;
+                parties_signed++;
+            }
+        }
+    }
+    
+    // Any member can initiate a payment request
+    function initiatePayment(uint val) {
+        if (members[msg.sender]) {
+            amountToSend = val;
+            for(uint i=0;i<wallet_parties.length;i++) {
+                // revoke all signatures if the transfer value
+                // has changed
+                signed[wallet_parties[i]] = false;
+            }
+            parties_signed = 0;
+            sent_money = false;
+        }
+    }
+    
+    // let parties revoke their signature
+    function revokeSignature() {
+        if (signed[msg.sender]) {
+            signed[msg.sender] = false;
+            if (parties_signed > 0) {
+                parties_signed--;
+            }
+        }
+    }
+
+    // transfer the money to destination
+    function release_funds(address dest) {
+        // only people who have signed the funds to be released 
+        // can call this to transfer some amount to 
+        if (signed[msg.sender] && parties_signed >= k) {
+            // prevent multiple spends
+            if (!sent_money) {
+                sent_money = true;
+                dest.transfer(amountToSend);
+            }
+        }
+    }
+}
